@@ -1,17 +1,19 @@
 import mmap
 import contextlib
 import os
+import datetime
+import socket
 
 
 flag = True
 path = "H:\\"
 stack = []
 count_stack = -1
-host_path = 'C:\\Users\\eslam\\Desktop\\File System.bin'
+OS_path = 'C:\\Users\\eslam\\Desktop\\File System.bin'
 
 class Virtual_disk:
     def initialize_virtual_disk(self):
-        virtual_file = open(host_path, "wb")
+        virtual_file = open(OS_path, "wb")
         # create a virtual disk
         for cluster in range(1024):
             for column in range(1024):
@@ -58,7 +60,7 @@ class Directory(Directory_Entry):
     def write_moved_content_in_virtual_disk(self, file, fat_index, cluster=1):
         fat = Fat_Table()
 
-        with open(host_path, "r+") as out_file:
+        with open(OS_path, "r+") as out_file:
             with contextlib.closing(mmap.mmap(out_file.fileno(), 0)) as con:
                 available_area = self.get_avaiable_index_in_cluster(cluster)
 
@@ -85,7 +87,7 @@ class Directory(Directory_Entry):
 
     def write_copied_content_in_virtual_disk(self, file, content_index, cluster=1):
         fat = Fat_Table()
-        with open(host_path, "r+") as out_file:
+        with open(OS_path, "r+") as out_file:
             with contextlib.closing(mmap.mmap(out_file.fileno(), 0)) as con:
                 available_area = self.get_avaiable_index_in_cluster(cluster)
 
@@ -115,7 +117,7 @@ class Directory(Directory_Entry):
     def write_content_in_virtual_disk(self, object_lst, cluster=0):
         fat = Fat_Table()
 
-        with open(host_path, "r+") as out_file:
+        with open(OS_path, "r+") as out_file:
             with contextlib.closing(mmap.mmap(out_file.fileno(), 0)) as con:
                 for file in object_lst:
 
@@ -147,7 +149,7 @@ class Directory(Directory_Entry):
 
     def get_avaiable_index_in_cluster(self, cluster):
         count = 0
-        with open(host_path, "r+b") as file:
+        with open(OS_path, "r+b") as file:
             file = file.read()[(cluster + 5) * 1024:]
             while count < len(file):
                 if file[count:count + 32] == b"0" * 32:
@@ -155,7 +157,7 @@ class Directory(Directory_Entry):
                 count += 32
 
     def convert_number_to_str(self, first_cluster):
-        with open(host_path, "r+b") as file:
+        with open(OS_path, "r+b") as file:
             with contextlib.closing(mmap.mmap(file.fileno(), 0)) as con:
                 char = str(first_cluster)
                 if len(char) == 1:
@@ -171,12 +173,14 @@ class Directory(Directory_Entry):
 
     def search_for_a_cluster_in_file_system(self):
         count = 0
-        with open(host_path, "r+b") as file:
+        with open(OS_path, "r+b") as file:
             file = file.read()[6 * 1024:]
             while count < len(file):
                 if file[count:count + 1024] == b"0" * 1024:
                     return count // 1024 + 1
                 count += 1024
+            else:
+                print('no free space')
 
     def create_a_directory(self, lst):
         for direct in lst:
@@ -192,9 +196,10 @@ class Directory(Directory_Entry):
             else:
                 print("you forgot the extension in \'", direct, "\'")
 
-    def get_directory_details(self, folder):
-        with open(host_path, "r+") as file:
-            file = file.read()[6 * 1024:]
+    def get_directory_details(self, folder, cluster=1):
+        with open(OS_path, "r+") as file:
+            clust = (cluster+5) * 1024
+            file = file.read()[clust:clust+1024]
 
             count = 0
             while count < len(file):
@@ -228,10 +233,12 @@ class Directory(Directory_Entry):
                     return dir_file
                 else:
                     count += 21
+            return None
 
-    def get_file_details(self, folder):
-        with open(host_path, "r+") as file:
-            file = file.read()[6 * 1024:]
+    def get_file_details(self, folder, cluster=1):
+        with open(OS_path, "r+") as file:
+            clust = (cluster + 5) * 1024
+            file = file.read()[clust:clust + 1024]
 
             count = 0
             while count < len(file):
@@ -265,9 +272,10 @@ class Directory(Directory_Entry):
                     return dir_file
                 else:
                     count += 21
+            return None
 
     def read_content_from_virtual_disk(self, cluster):
-        with open(host_path, "r+") as read_file_system:
+        with open(OS_path, "r+") as read_file_system:
             clust = (cluster + 5) * 1024
             read_file_system = read_file_system.read()[clust:clust + 1024]
             count = 0
@@ -297,15 +305,17 @@ class Directory(Directory_Entry):
                         index = file_name.find("TXT")
                         file = file_name[:index]
                         dir_file = Directory(file + ".txt", attr, size, empty, first_cluster)
+                        self.dir_lst.append(dir_file)
                         dir_file.dir_name = file + ".txt"
                     else:
                         dir_file = Directory(file_name, attr, size, empty, first_cluster)
-                    self.dir_lst.append(dir_file)
+                        self.dir_lst.append(dir_file)
+
 
             return self.dir_lst
 
     def read_file_content(self, cluster):
-        with open(host_path, "r+") as read_file_system:
+        with open(OS_path, "r+") as read_file_system:
             clust = (cluster + 5) * 1024
             read_file_content = read_file_system.read()[clust:clust + 1024]
 
@@ -314,7 +324,7 @@ class Directory(Directory_Entry):
     def search_for_a_folder(self, folder, cluster=1):
         count = 0
         clust = (cluster+5) * 1024
-        with open(host_path, "r+") as delete_folder:
+        with open(OS_path, "r+") as delete_folder:
             d_folder = delete_folder.read()[clust:clust+1024]
             while count < len(d_folder):
                 fold = d_folder[count:count+11].split("*")[0]
@@ -331,7 +341,7 @@ class File:
         self.content = content.replace('\n', '*')
 
     def write_file_content(self, cluster):
-        with open(host_path, "r+") as out_file:
+        with open(OS_path, "r+") as out_file:
             with contextlib.closing(mmap.mmap(out_file.fileno(), 0)) as con:
                 clust = (cluster + 5) * 1024
                 length = len(self.content)
@@ -339,7 +349,7 @@ class File:
                 con[clust:clust + length] = bytes(self.content, 'ascii')
 
     def clear_content(self, cluster):
-        with open(host_path, "r+") as out_file:
+        with open(OS_path, "r+") as out_file:
             with contextlib.closing(mmap.mmap(out_file.fileno(), 0)) as con:
                 clust = (cluster + 5) * 1024
                 con[clust:clust + 1024] = bytes('0' * 1024, 'ascii')
@@ -349,7 +359,7 @@ class Fat_Table:
     FAT_List = []
 
     def initialize_FAT_table(self):
-        with open(host_path, "r+b") as file:
+        with open(OS_path, "r+b") as file:
             with contextlib.closing(mmap.mmap(file.fileno(), 0)) as con:
                 con[1024:1028] = bytes("00-1", "ascii")
                 con[1028:1032] = bytes("0002", "ascii")
@@ -360,7 +370,7 @@ class Fat_Table:
                 con.flush()
 
     def read_from_file_system(self):
-        with open(host_path, "r+") as file:
+        with open(OS_path, "r+") as file:
             FAT_file = file.read()[1 * 1024:5 * 1024]
 
             count = 0
@@ -392,7 +402,7 @@ class Fat_Table:
 
     def read_from_Fat_Table(self):
         count = 1024
-        with open(host_path, "r+b") as file:
+        with open(OS_path, "r+b") as file:
             with contextlib.closing(mmap.mmap(file.fileno(), 0)) as con:
                 for i in self.FAT_List:
                     char = str(i)
@@ -411,7 +421,7 @@ class Fat_Table:
 
 
 def RMDIR_Command(folder_index, cluster=1):
-    with open(host_path, "r+b") as delete_folder:
+    with open(OS_path, "r+b") as delete_folder:
         with contextlib.closing(mmap.mmap(delete_folder.fileno(), 0)) as con:
             clust = (cluster + 5) * 1024
             con[clust+folder_index:clust+folder_index+32] = bytes("0" * 32, "ascii")
@@ -435,31 +445,31 @@ def Help_Command():
     print("6- dir:", end='\t')
     print("\t\t this tool uses to display the files and folders exist in the current path.", end='\n\n')
 
-    print("8- del:", end='\t')
+    print("7- del:", end='\t')
     print("\t\t this tool uses to remove the files.", end='\n\n')
 
-    print("9- cls:", end='\t')
+    print("8- cls:", end='\t')
     print("\t\t this tool uses to clear screen.", end='\n\n')
 
-    print("10- help:", end='')
+    print("9- help:", end='')
     print("\t\t this tool provides Help information for Windows commands.", end='\n\n')
 
-    print("11- touch:", end='')
+    print("10- touch:", end='')
     print("\t\t this tool uses to create a new file.", end='\n\n')
 
-    print("12- rd:", end='')
-    print("\t\t this tool uses to remove a specific directory in the current path.", end='\n\n')
+    print("11- rd:", end='')
+    print("\t\t\t this tool uses to remove a specific directory in the current path.", end='\n\n')
 
-    print("13- md:", end='')
-    print("\t\t this tool uses to create a directory in the current path.", end='\n\n')
+    print("12- md:", end='')
+    print("\t\t\t this tool uses to create a directory in the current path.", end='\n\n')
 
-    print("14- type:", end='\t')
+    print("13- type:", end='\t')
     print("\t this tool uses display the file content.", end='\n\n')
 
-    print("15- rename:", end='')
+    print("14- rename:", end='')
     print("\t\t this tool uses rename a file.", end='\n\n')
 
-    print("16- quit:", end='')
+    print("15- quit:", end='')
     print("\t\t this tool uses shut down the shell.", end='\n\n')
 
 def Commands_Usage(cmd):
@@ -557,7 +567,7 @@ def Commands_Usage(cmd):
         print("\t you can use it by simply type a [quit] command")
 
 def Rename_Dir_Command(new_name, folder_index, cluster=1):
-    with open(host_path, "r+b") as delete_folder:
+    with open(OS_path, "r+b") as delete_folder:
         with contextlib.closing(mmap.mmap(delete_folder.fileno(), 0)) as con:
             clust = (cluster + 5) * 1024
             length = 0
@@ -569,7 +579,7 @@ def Rename_Dir_Command(new_name, folder_index, cluster=1):
             con[clust+folder_index:clust+folder_index+11] = bytes(new_name + '*'*length, "ascii")
 
 def Rename_File_Command(new_name, file_index, cluster=1):
-    with open(host_path, "r+b") as delete_folder:
+    with open(OS_path, "r+b") as delete_folder:
         with contextlib.closing(mmap.mmap(delete_folder.fileno(), 0)) as con:
             clust = (cluster + 5) * 1024
 
@@ -590,7 +600,7 @@ def Draw():
     print("         * * * * * * * * * * * * * * * * * * * * * * * * * * * * * ")
     print("         *                                                       * ")
     print("         *                   Command Prompot                     * ")
-    print("         *       1- need help type: help to see the help menu    * ")
+    print("         *       1- need help type: help to see the help menue   * ")
     print("         *       2- help + command: give you a description of    * ")
     print("         *          this command behavior                        * ")
     print("         *       3- terminate the program type: quit             * ")
@@ -619,7 +629,7 @@ def Check_Path(current_path, file_name=""):
 
 fat = Fat_Table()
 
-if not Check_Path(host_path):
+if not Check_Path(OS_path):
     virtual = Virtual_disk()
     virtual.initialize_virtual_disk()
     fat.initialize_FAT_table()
@@ -637,7 +647,7 @@ while flag:
             Draw()
         open_count += 1
 
-        statement = input("*Admin* {} > ".format(path))
+        statement = input("Admin> {} # ".format(path))
         command = statement.split()
 
         if command[0].lower() == 'quit':
@@ -645,19 +655,31 @@ while flag:
                 fat.read_from_Fat_Table()
                 flag = False
             else:
-                print("ops ! it is too much arguments")
+                print("too many arguments")
 
 
         elif command[0].lower() == 'md':
-            if len(command) == 0:
-                print(" please enter some arguments ([folder's name] / [/?])")
+            if len(command) == 1:
+                print("enter some arguments ([folder's name] / [/?])")
+
             else:
                 if command[1] == '/?':
                     Commands_Usage(command[0])
                 else:
                     dir = Directory()
                     dir.dir_lst.clear()
-                    dir.create_a_directory(command[1:])
+
+                    for folder in command[1:]:
+                        if len(stack) == 0:
+                            fold = dir.get_directory_details(folder)
+                        else:
+                            fold = dir.get_directory_details(folder, stack[-1][1])
+
+                        if fold is not None:
+                            print(folder, 'already exists')
+                            continue
+                        else:
+                            dir.create_a_directory([folder])
 
                     if len(stack) == 0:
                         free_cluster = 1
@@ -686,10 +708,12 @@ while flag:
                                     count_cluster += 32
 
                     else:
-                        folder = dir.get_directory_details(stack[len(stack)-1][0])
+                        if len(stack) == 1:
+                            folder = dir.get_directory_details(stack[-1][0])
+                        else:
+                            folder = dir.get_directory_details(stack[-1][0], stack[-2][1])
 
                         cluster_number = fat.FAT_List[folder.start_cluster]
-
                         if cluster_number == -1:
                             free_cluster = dir.search_for_a_cluster_in_file_system()
                             fat.FAT_List[folder.start_cluster] = free_cluster
@@ -700,19 +724,29 @@ while flag:
                         sub_directs.clear()
                         sub_directs = dir.read_content_from_virtual_disk(cluster_number)
 
-                    print(" good job created successfully %100")
-
 
         elif command[0].lower() == 'touch':
-            if len(command) == 0:
-                print(" please enter some arguments ([folder's name] / [/?])")
+            if len(command) == 1:
+                print("enter some arguments ([folder's name] / [/?])")
             else:
                 if command[1] == '/?':
                     Commands_Usage(command[0])
                 else:
                     file = Directory()
                     file.dir_lst.clear()
-                    file.create_a_file(command[1:])
+
+                    for fil in command[1:]:
+                        if len(stack) == 0:
+                            fold = file.get_file_details(fil)
+                        else:
+                            fold = file.get_file_details(fil, stack[-1][1])
+
+                        if fold is not None:
+                            print(fil, 'already exists')
+                            continue
+                        else:
+                            file.create_a_file([fil])
+
 
                     if len(stack) == 0:
                         free_cluster = 1
@@ -738,7 +772,11 @@ while flag:
                                     file.write_content_in_virtual_disk(file.dir_lst[count_cluster:count_cluster+32], fat.FAT_List[5])
                                     count_cluster += 32
                     else:
-                        folder_parent = file.get_directory_details(stack[len(stack)-1][0])
+                        if len(stack) == 1:
+                            folder_parent = file.get_directory_details(stack[-1][0])
+                        else:
+                            folder_parent = file.get_directory_details(stack[-1][0], stack[-2][1])
+
                         cluster_number = fat.FAT_List[folder_parent.start_cluster]
 
                         if cluster_number == -1:
@@ -751,10 +789,9 @@ while flag:
                         sub_directs.clear()
                         sub_directs = file.read_content_from_virtual_disk(cluster_number)
 
-                    print(" good job created successfully %100")
-
 
         elif command[0].lower() == 'cd':
+            dir = Directory()
             if len(command) == 1:
                 print(path)
             else:
@@ -762,26 +799,48 @@ while flag:
                     if command[1] == '/?':
                         Commands_Usage(command[0])
                     else:
-                        dir = Directory()
-                        if command[1] == "..":
-                            sub_directs.clear()
-                            sub_directs = dir.read_content_from_virtual_disk(1)
-                            stack.pop()
-                            new_path = path.split("\\")
-                            path = "\\".join(new_path[:-2])
-                            first_cluster = 0
+                        if command[1].startswith(".."):
+                            slash_index = command[1].find('\\')
+                            if slash_index == -1:
+                                sub_directs.clear()
+                                sub_directs = dir.read_content_from_virtual_disk(1)
+                                stack.pop()
+                                new_path = path.split("\\")
+                                path = "\\".join(new_path[:-2])
+                                first_cluster = 0
 
 
-                            if path[-1] != "\\":
-                                path = path + "\\"
+                                if path[-1] != "\\":
+                                    path = path + "\\"
 
-                            count_stack -= 1
+                                count_stack -= 1
+                            else:
+                                dots = command[1].split('\\')
+                                for i in dots:
+                                    sub_directs.clear()
+                                    sub_directs = dir.read_content_from_virtual_disk(1)
+                                    stack.pop()
+                                    new_path = path.split("\\")
+                                    path = "\\".join(new_path[:-2])
+                                    first_cluster = 0
+
+                                    if path[-1] != "\\":
+                                        path = path + "\\"
+
+                                    count_stack -= 1
 
                         else:
                             slash_index = command[1].find('\\')
-
                             if slash_index == -1:
-                                folder = dir.get_directory_details(command[1])
+                                if len(stack) == 0:
+                                    folder = dir.get_directory_details(command[1])
+                                else:
+                                    folder = dir.get_directory_details(command[1], stack[-1][1])
+
+                                if folder is None:
+                                    print(' ops ! folder not found')
+                                    continue
+
                                 cluster_number = fat.FAT_List[folder.start_cluster]
 
                                 if folder.dir_attr == "1":
@@ -798,8 +857,10 @@ while flag:
                                 if not command[1].startswith('H:\\'):
                                     folders = command[1].split('\\')
                                     for folder in folders:
-                                        fold = dir.get_directory_details(folder)
-
+                                        if len(stack)==0:
+                                            fold = dir.get_directory_details(folder)
+                                        else:
+                                            fold = dir.get_directory_details(folder, stack[-1][1])
                                         if fold is None:
                                             print(' ops ! folder not found')
                                             break
@@ -816,24 +877,32 @@ while flag:
                                             print(" ops ! not a directory")
                                 else:
                                     folders = command[1].split('\\')
-                                    path = "H:\\"
-                                    for folder in folders[1:]:
-                                        fold = dir.get_directory_details(folder)
+                                    if command[1] == 'H:\\':
+                                        path = 'H:\\'
+                                        stack.clear()
+                                    else:
+                                        path = "H:\\"
+                                        stack.clear()
+                                        for folder in folders[1:]:
+                                            if len(stack) == 0:
+                                                fold = dir.get_directory_details(folder)
+                                            else:
+                                                fold = dir.get_directory_details(folder, stack[-1][1])
 
-                                        if fold is None:
-                                            print(' ops ! folder not found')
-                                            break
+                                            if fold is None:
+                                                print(' ops ! folder not found')
+                                                break
 
-                                        cluster_number = fat.FAT_List[fold.start_cluster]
-                                        if fold.dir_attr == "1":
-                                            if cluster_number != -1:
-                                                sub_directs.clear()
-                                                sub_directs = dir.read_content_from_virtual_disk(cluster_number)
-                                            path = path + folder + "\\"
-                                            stack.append([folder, cluster_number])
-                                            count_stack += 1
-                                        elif fold.dir_attr == "0":
-                                            print(" ops ! not a directory")
+                                            cluster_number = fat.FAT_List[fold.start_cluster]
+                                            if fold.dir_attr == "1":
+                                                if cluster_number != -1:
+                                                    sub_directs.clear()
+                                                    sub_directs = dir.read_content_from_virtual_disk(cluster_number)
+                                                path = path + folder + "\\"
+                                                stack.append([folder, cluster_number])
+                                                count_stack += 1
+                                            elif fold.dir_attr == "0":
+                                                print(" ops ! not a directory")
                 except:
                     print("directory not found")
 
@@ -842,38 +911,48 @@ while flag:
             count_files = 0
             count_folders = 0
             total_sum = 0
-
+            dir_stack = []
             dir = Directory()
 
             if len(command) == 2 and command[1] == '/?':
                 Commands_Usage(command[0])
 
             elif len(command) == 2 and command[1] != '/?':
-
                 if command[1].startswith('H:\\'):
                     dir_folders = command[1].split('\\')
-                    for folder in dir_folders[1:]:
-                        fold = dir.get_directory_details(folder)
 
-                        if fold is None:
-                            print('  sorry ! folder not found')
-                            break
-
-                        cluster_number = fat.FAT_List[fold.start_cluster]
+                    if command[1] == 'H:\\':
                         sub_directs.clear()
-                        sub_directs = dir.read_content_from_virtual_disk(cluster_number)
+                        sub_directs = dir.read_content_from_virtual_disk(1)
+                    else:
+                        for folder in dir_folders[1:]:
+                            if len(dir_stack) == 0:
+                                fold = dir.get_directory_details(folder)
+                            else:
+                                fold = dir.get_directory_details(folder, dir_stack[-1][1])
+
+                            if fold is None:
+                                print('  sorry ! folder not found')
+                                break
+
+                            cluster_number = fat.FAT_List[fold.start_cluster]
+                            dir_stack.append([folder, cluster_number])
+                            sub_directs.clear()
+                            sub_directs = dir.read_content_from_virtual_disk(cluster_number)
 
                     if len(sub_directs) > 0:
-
                         for folder in sub_directs:
                             if folder.dir_attr == "1":
                                 print(folder.dir_name, "   <DIR>")
                                 count_folders += 1
                             else:
-                                file = dir.get_file_details(folder.dir_name)
+                                if len(dir_stack) == 0:
+                                    file = dir.get_file_details(folder.dir_name)
+                                else:
+                                    file = dir.get_file_details(folder.dir_name, dir_stack[-1][1])
 
-                                if folder is None:
-                                    print(' sorry ! file not found')
+                                if file is None:
+                                    print('sorry!  file not found')
                                     break
 
                                 cluster = fat.FAT_List[file.start_cluster]
@@ -900,11 +979,15 @@ while flag:
                     sub_directs = dir.read_content_from_virtual_disk(1)
 
                 else:
-                    folder = dir.get_directory_details(stack[len(stack)-1][0])
+                    folder = Directory()
+                    if len(stack) == 1:
+                        folder = dir.get_directory_details(stack[-1][0])
+                    else:
+                        folder = dir.get_directory_details(stack[-1][0], stack[-2][1])
 
                     if folder is None:
                         print(' sorry ! folder not found')
-                        break
+                        continue
 
                     cluster_number = fat.FAT_List[folder.start_cluster]
                     sub_directs.clear()
@@ -916,7 +999,11 @@ while flag:
                             print(folder.dir_name, "   <DIR>")
                             count_folders += 1
                         else:
-                            file = dir.get_file_details(folder.dir_name)
+                            if len(stack) == 0:
+                                file = dir.get_file_details(folder.dir_name)
+                            else:
+                                file = dir.get_file_details(folder.dir_name, stack[-1][1])
+
                             if file is None:
                                 print(' we have not  content')
                                 break
@@ -940,22 +1027,38 @@ while flag:
                     print()
                     print('\t\t\t - ', count_folders, ' Folders')
                     print('\t\t\t - ', count_files, ' Files    ', total_sum, 'Bytes')
-
+                sub_directs.clear()
             elif len(command) > 2:
                 print(" ops ! something goes wrong,  please try again")
 
 
         elif command[0].lower() == "rd":
-            if command[1] == '/?':
+            if len(command) == 2 and command[1] == '/?':
                 Commands_Usage(command[0])
+            elif len(command) == 1:
+                print('enter some folders')
             else:
                 try:
                     dir = Directory()
                     for one_folder in command[1:]:
-                        folder = dir.get_directory_details(one_folder)
+                        if len(stack) == 0:
+                            folder = dir.get_directory_details(one_folder)
+                        else:
+                            folder = dir.get_directory_details(one_folder, stack[-1][1])
+
+                        if folder is None:
+                            print('folder not found')
+                            break
+
                         if folder.dir_attr == "1":
                             if len(stack) == 0:
                                 folder_index = dir.search_for_a_folder(folder.dir_name)
+
+                                cluster = fat.FAT_List[folder.start_cluster]
+                                sub_directs.clear()
+                                if len(dir.read_content_from_virtual_disk(cluster)) == 0:
+                                    fat.FAT_List[folder.start_cluster] = -1
+
                                 if fat.FAT_List[folder.start_cluster] == -1:
                                     fat.FAT_List[folder.start_cluster] = 0
                                     RMDIR_Command(folder_index)
@@ -964,9 +1067,15 @@ while flag:
                                     print("folder not empty")
                             else:
                                 folder_index = dir.search_for_a_folder(folder.dir_name, stack[len(stack)-1][1])
+
+                                cluster = fat.FAT_List[folder.start_cluster]
+                                sub_directs.clear()
+                                if len(dir.read_content_from_virtual_disk(cluster)) == 0:
+                                    fat.FAT_List[folder.start_cluster] = -1
+
                                 if fat.FAT_List[folder.start_cluster] == -1:
-                                    RMDIR_Command(folder_index, stack[len(stack)-1][1])
                                     fat.FAT_List[folder.start_cluster] = 0
+                                    RMDIR_Command(folder_index, stack[len(stack) - 1][1])
                                     sub_directs.clear()
                                     sub_directs = dir.read_content_from_virtual_disk(stack[len(stack)-1][1])
                                     print(" yes $ Deleted Successfully")
@@ -989,7 +1098,15 @@ while flag:
                     for one_file in command[1:]:
                         dot_index = one_file.find('.')
                         if dot_index != -1:
-                            file = dir.get_file_details(one_file)
+                            if len(stack) == 0:
+                                file = dir.get_file_details(one_file)
+                            else:
+                                file = dir.get_file_details(one_file, stack[-1][1])
+
+                            if file is None:
+                                print('file not found')
+                                break
+
                             if file.dir_attr == "0":
                                 if len(stack) == 0:
                                     file_index = dir.search_for_a_folder(file.dir_name)
@@ -1016,9 +1133,9 @@ while flag:
                             elif file.dir_attr == "1":
                                 print("not a file")
                         else:
-                            print(" Unfortunately  ! you forgot the extension in \'", one_file, "\'")
+                            print("Unfortunately, you forgot the extension in \'", one_file, "\'")
                 except:
-                    print(" sorry ! file not fount")
+                    print("file not fount")
 
 
         elif command[0].lower() == 'cls':
@@ -1028,7 +1145,7 @@ while flag:
                 os.system("cls")
                 open_count = 0
             elif (len(command) == 2 and command[1] != "/?") or len(command) > 2:
-                print(" Unfortunately !! something goes wrong, try again")
+                print("something goes wrong, try again")
 
 
         elif command[0].lower() == 'help':
@@ -1037,7 +1154,7 @@ while flag:
             elif len(command) == 2:
                 Commands_Usage(command[1])
             else:
-                print(" no sorry ! it is too much arguments")
+                print("too many arguments")
 
 
         elif command[0].lower() == 'copy':
@@ -1051,13 +1168,25 @@ while flag:
                 copy_file_dot_index = command[2].find('.')
 
                 if original_file_dot_index != -1 or copy_file_dot_index != -1:
-                    original_file = dir.get_file_details(command[1])
+                    if len(stack) == 0:
+                        original_file = dir.get_file_details(command[1])
+                    else:
+                        original_file = dir.get_file_details(command[1], stack[-1][1])
                     copy_file_path = command[3].split('\\')
 
                     if original_file is not None:
                         content = dir.read_file_content(fat.FAT_List[original_file.start_cluster])
+
                         for folder in copy_file_path[1:]:
-                            fold = dir.get_directory_details(folder)
+                            if len(copy_stack) == 0:
+                                fold = dir.get_directory_details(folder)
+                            else:
+                                fold = dir.get_directory_details(folder, copy_stack[-1][1])
+
+                            if fold is None:
+                                print('folder not found')
+                                break
+
                             cluster_number = fat.FAT_List[fold.start_cluster]
 
                             if cluster_number == -1:
@@ -1072,20 +1201,35 @@ while flag:
                                 folder_cluster = dir.search_for_a_folder(fold.dir_name, copy_stack[len(copy_stack)-1][1])
                                 copy_stack.append([fold.dir_name, cluster_number])
 
-                        copy_file = Directory(command[2], '0', original_file.dir_size, original_file.dir_empty, -1)
-                        file = File(content)
-                        content_cluster = dir.search_for_a_cluster_in_file_system()
-                        file.write_file_content(content_cluster)
-                        dir.write_copied_content_in_virtual_disk(copy_file, content_cluster, copy_stack[len(copy_stack)-1][1])
-                        print(" well done copied successfully")
-                        copy_stack.clear()
+                        try:
+                            copy_file = Directory()
+                            copy_file.dir_lst.clear()
+                            copy_file.create_a_file([command[2]])
+                            file = File(content)
+
+                            if len(file.content.strip('0')) == 0:
+                                free_index = fat.get_avaiable_index_in_Fat_table()
+                                fat.FAT_List[free_index] = -1
+                                dir.write_content_in_virtual_disk(copy_file.dir_lst, copy_stack[-1][1])
+
+                            else:
+                                copy_file = Directory(command[2], "0", original_file.dir_size, original_file.dir_empty,
+                                                      -1)
+                                content_cluster = dir.search_for_a_cluster_in_file_system()
+                                file.write_file_content(content_cluster)
+                                dir.write_copied_content_in_virtual_disk(copy_file, content_cluster, copy_stack[-1][1])
+
+                            copy_file.dir_lst.clear()
+                            copy_stack.clear()
+                        except:
+                            pass
                     else:
                         print(" sorry ! file not found")
                 else:
                     if original_file_dot_index == -1:
-                        print(" Unfortunately !!you forgot the extension in \'", command[1], "\'")
+                        print("Unfortunately, you forgot the extension in \'", command[1], "\'")
                     elif copy_file_dot_index == -1:
-                        print("Unfortunately !! you forgot the extension in \'", command[2], "\'")
+                        print("Unfortunately, you forgot the extension in \'", command[2], "\'")
 
 
         elif command[0].lower() == 'move':
@@ -1099,7 +1243,15 @@ while flag:
                 move_file_dot_index = command[2].find('.')
 
                 if original_file_dot_index != -1 or move_file_dot_index != -1:
-                    original_file = dir.get_file_details(command[1])
+                    if len(stack) == 0:
+                        original_file = dir.get_file_details(command[1])
+                    else:
+                        original_file = dir.get_file_details(command[1], stack[-1][1])
+
+                    if original_file is None:
+                        print('file not found')
+                        continue
+
                     read_cluster = original_file.start_cluster
 
                     try:
@@ -1113,7 +1265,7 @@ while flag:
                                 sub_directs.clear()
                                 sub_directs = dir.read_content_from_virtual_disk(stack[len(stack) - 1][1])
                         elif original_file.dir_attr == "1":
-                            print(" it is not a file")
+                            print("not a file")
 
 
                         move_file_path = command[3].split('\\')
@@ -1123,14 +1275,16 @@ while flag:
                                 copy_file = Directory(command[2], "0", original_file.dir_size, original_file.dir_empty,
                                                       -1)
                                 dir.write_moved_content_in_virtual_disk(copy_file, read_cluster, 1)
-                                print(" well done moved successfully")
                                 move_stack.clear()
                             else:
                                 for folder in move_file_path[1:]:
-                                    fold = dir.get_directory_details(folder)
+                                    if len(move_stack) == 0:
+                                        fold = dir.get_directory_details(folder)
+                                    else:
+                                        fold = dir.get_directory_details(folder, move_stack[-1][1])
 
                                     if fold is None:
-                                        print(' ops ! folder not found')
+                                        print('folder not found')
                                         break
 
                                     cluster_number = fat.FAT_List[fold.start_cluster]
@@ -1144,28 +1298,28 @@ while flag:
                                         folder_cluster = dir.search_for_a_folder(fold.dir_name, 1)
                                         move_stack.append([fold.dir_name, cluster_number])
                                     else:
-                                        folder_cluster = dir.search_for_a_folder(fold.dir_name,
-                                                                                 move_stack[len(move_stack) - 1][1])
+                                        folder_cluster = dir.search_for_a_folder(fold.dir_name, move_stack[-1][1])
                                         move_stack.append([fold.dir_name, cluster_number])
 
-                                copy_file = Directory(command[2], "0", original_file.dir_size, original_file.dir_empty,
-                                                      -1)
+                                try:
+                                    copy_file = Directory(command[2], "0", original_file.dir_size, original_file.dir_empty,
+                                                          -1)
 
-                                dir.write_moved_content_in_virtual_disk(copy_file, read_cluster,
-                                                                        move_stack[len(move_stack) - 1][1])
-                                print(" yes well done moved successfully")
-                                move_stack.clear()
+                                    dir.write_moved_content_in_virtual_disk(copy_file, read_cluster, move_stack[-1][1])
+                                    move_stack.clear()
+                                except:
+                                    pass
                         else:
-                            print(" sorry ! file not found")
+                            print("file not found")
 
                     except:
-                        print(" ops ! file not fount")
+                        print("file not fount")
 
                 else:
                     if original_file_dot_index == -1:
-                        print("Unfortunately ! you forgot the extension in \'", command[1], "\'")
+                        print("Unfortunately, you forgot the extension in \'", command[1], "\'")
                     elif move_file_dot_index == -1:
-                        print("Unfortunately ! you forgot the extension in \'", command[2], "\'")
+                        print("Unfortunately, you forgot the extension in \'", command[2], "\'")
 
 
         elif command[0].lower() == 'import':
@@ -1192,20 +1346,40 @@ while flag:
                         if stack[-1][1] == -1:
                             free_cluster = dir.search_for_a_cluster_in_file_system()
                             dir.write_content_in_virtual_disk(dir.dir_lst, free_cluster)
-                            folder_details = dir.get_directory_details(stack[-1][0])
+
+                            folder_details = dir.get_directory_details(stack[-1][0], stack[-1][1])
+
+                            if folder_details is None:
+                                print('folder not found')
+                                continue
+
                             fat.FAT_List[folder_details.start_cluster] = free_cluster
                         else:
                             folder_details = dir.get_directory_details(stack[-1][0])
+
+                            if folder_details is None:
+                                print('folder not found')
+                                continue
+
                             cluster_number = fat.FAT_List[folder_details.start_cluster]
                             dir.write_content_in_virtual_disk(dir.dir_lst, cluster_number)
 
                     file = File(import_file)
                     free_cluster = dir.search_for_a_cluster_in_file_system()
                     file_details = dir.get_file_details(file_name)
-                    fat.FAT_List[file_details.start_cluster] = free_cluster
-                    file.write_file_content(free_cluster)
+
+                    if file_details is None:
+                        print('file not found')
+                        continue
+
+                    if len(file.content) != 0:
+                        fat.FAT_List[file_details.start_cluster] = free_cluster
+                        file.write_file_content(free_cluster)
+                    else:
+                        fat.FAT_List[file_details.start_cluster] = -1
+
                 else:
-                    print(' Unfortunately wrong path ! ')
+                    print('wrong path')
 
 
             elif len(command) == 3:
@@ -1213,57 +1387,92 @@ while flag:
                     import_file = open(command[1], 'r+').read()
                     file_name = command[1].split('\\')[-1]
                     import_to_path = command[2].split('\\')[1:]
+                    import_stack = []
+                    cluster_number = -1
+                    folder_details = Directory()
+                    sign = True
+
                     dir.dir_lst.clear()
                     dir.create_a_file([file_name])
 
-                    folder_details = dir.get_directory_details(import_to_path[-1])
+                    for folder in import_to_path:
+                        if len(import_stack) == 0:
+                            folder_details = dir.get_directory_details(folder)
+                        else:
+                            folder_details = dir.get_directory_details(folder, import_stack[-1][1])
 
-                    if folder_details is None:
-                        print(' sorry folder not found')
-                        break
+                        if folder_details is None:
+                            sign = False
+                            print('folder not found')
+                            break
 
-                    cluster_number = fat.FAT_List[folder_details.start_cluster]
-                    if cluster_number == -1:
+                        cluster_number = fat.FAT_List[folder_details.start_cluster]
+                        import_stack.append([folder, cluster_number])
+
+                    if sign:
+                        if cluster_number == -1:
+                            free_cluster = dir.search_for_a_cluster_in_file_system()
+                            fat.FAT_List[folder_details.start_cluster] = free_cluster
+                            cluster_number = free_cluster
+                            dir.write_content_in_virtual_disk(dir.dir_lst, free_cluster)
+                        else:
+                            dir.write_content_in_virtual_disk(dir.dir_lst, cluster_number)
+
+                        file = File(import_file)
                         free_cluster = dir.search_for_a_cluster_in_file_system()
-                        fat.FAT_List[folder_details.start_cluster] = free_cluster
-                        dir.write_content_in_virtual_disk(dir.dir_lst, free_cluster)
-                    else:
-                        dir.write_content_in_virtual_disk(dir.dir_lst, cluster_number)
-
-                    file = File(import_file)
-                    free_cluster = dir.search_for_a_cluster_in_file_system()
-                    file_details = dir.get_file_details(file_name)
-                    fat.FAT_List[file_details.start_cluster] = free_cluster
-                    file.write_file_content(free_cluster)
+                        file_details = dir.get_file_details(file_name, cluster_number)
+                        if len(file.content) != 0:
+                            fat.FAT_List[file_details.start_cluster] = free_cluster
+                            file.write_file_content(free_cluster)
+                        else:
+                            fat.FAT_List[file_details.start_cluster] = -1
                 else:
-                    print('Unfortunately wrong path! ')
+                    print('wrong path')
 
             elif len(command) == 4:
                 if Check_Path(command[1]):
                     import_file = open(command[1], 'r+').read()
                     import_to_path = command[2].split('\\')[1:]
+                    import_stack = []
+                    cluster_number = -1
+                    folder_details = Directory()
+                    sign = True
+
                     dir.dir_lst.clear()
                     dir.create_a_file([command[3]])
 
-                    folder_details = dir.get_directory_details(import_to_path[-1])
+                    for folder in import_to_path:
+                        if len(import_stack) == 0:
+                            folder_details = dir.get_directory_details(folder)
+                        else:
+                            folder_details = dir.get_directory_details(folder, import_stack[-1][1])
 
-                    if folder_details is None:
-                        print('sorry folder not found ! ')
-                        break
+                        if folder_details is None:
+                            sign = False
+                            print('folder not found')
+                            break
 
-                    cluster_number = fat.FAT_List[folder_details.start_cluster]
-                    if cluster_number == -1:
+                        cluster_number = fat.FAT_List[folder_details.start_cluster]
+                        import_stack.append([folder, cluster_number])
+
+                    if sign:
+                        if cluster_number == -1:
+                            free_cluster = dir.search_for_a_cluster_in_file_system()
+                            fat.FAT_List[folder_details.start_cluster] = free_cluster
+                            cluster_number = free_cluster
+                            dir.write_content_in_virtual_disk(dir.dir_lst, free_cluster)
+                        else:
+                            dir.write_content_in_virtual_disk(dir.dir_lst, cluster_number)
+
+                        file = File(import_file)
                         free_cluster = dir.search_for_a_cluster_in_file_system()
-                        fat.FAT_List[folder_details.start_cluster] = free_cluster
-                        dir.write_content_in_virtual_disk(dir.dir_lst, free_cluster)
-                    else:
-                        dir.write_content_in_virtual_disk(dir.dir_lst, cluster_number)
+                        file_details = dir.get_file_details(command[3], cluster_number)
 
-                    file = File(import_file)
-                    free_cluster = dir.search_for_a_cluster_in_file_system()
-                    file_details = dir.get_file_details(command[3])
-                    fat.FAT_List[file_details.start_cluster] = free_cluster
-                    file.write_file_content(free_cluster)
+                        if len(file.content) != 0:
+                            fat.FAT_List[file_details.start_cluster] = free_cluster
+                            file.write_file_content(free_cluster)
+                        else:
+                            fat.FAT_List[file_details.start_cluster] = -1
                 else:
                     print('Unfortunately wrong path !')
 
@@ -1275,61 +1484,106 @@ while flag:
 
         elif command[0].lower() == 'export':
             dir = Directory()
+            export_stack = []
+            sign = True
+            folder_details = Directory()
+
             if len(command) == 2 and command[1] == '/?':
                 Commands_Usage(command[0])
 
             elif len(command) == 3:
                 if command[1].startswith('H:\\'):
                     export_path = command[1].split('\\')[1:]
-                    file_details = dir.get_file_details(export_path[-1])
+                    for folder in export_path[:-1]:
+                        if len(export_stack) == 0:
+                            folder_details = dir.get_directory_details(folder)
+                        else:
+                            folder_details = dir.get_directory_details(folder, export_stack[-1][1])
 
-                    if file_details is None:
-                        print(' sorry file not found')
-                    else:
-                        cluster_number = fat.FAT_List[file_details.start_cluster]
-                        file_content = dir.read_file_content(cluster_number).strip('0').replace('*', '\n')
+                        if folder_details is None:
+                            sign = False
+                            print('folder not found')
+                            break
 
-                        new_file = open(command[2]+export_path[-1], 'w+')
-                        new_file.write(file_content)
+                        cluster_number = fat.FAT_List[folder_details.start_cluster]
+                        export_stack.append([folder, cluster_number])
 
+                    if sign:
+                        file_details = dir.get_file_details(export_path[-1], export_stack[-1][1])
+                        if file_details is None:
+                            print('file not found')
+                        else:
+                            cluster_number = fat.FAT_List[file_details.start_cluster]
+                            file_content = dir.read_file_content(cluster_number).strip('0').replace('*', '\n')
+
+                            new_file = open(command[2]+'\\'+export_path[-1], 'w+')
+                            new_file.write(file_content)
+                            new_file.close()
                 else:
-                    file_details = dir.get_file_details(command[1])
+                    if len(stack) == 0:
+                        file_details = dir.get_file_details(command[1])
+                    else:
+                        file_details = dir.get_file_details(command[1], stack[-1][1])
+
                     if file_details is None:
-                        print(' sorry file not found')
+                        print('file not found')
                     else:
                         cluster_number = fat.FAT_List[file_details.start_cluster]
                         file_content = dir.read_file_content(cluster_number).strip('0').replace('*', '\n')
 
                         new_file = open(command[2]+'\\'+command[1], 'w+')
                         new_file.write(file_content)
+                        new_file.close()
 
 
             elif len(command) == 4:
                 if command[1].startswith('H:\\'):
                     export_path = command[1].split('\\')[1:]
-                    file_details = dir.get_file_details(export_path[-1])
+                    for folder in export_path[:-1]:
+                        if len(export_stack) == 0:
+                            folder_details = dir.get_directory_details(folder)
+                        else:
+                            folder_details = dir.get_directory_details(folder, export_stack[-1][1])
+
+                        if folder_details is None:
+                            sign = False
+                            print('folder not found')
+                            break
+
+                        cluster_number = fat.FAT_List[folder_details.start_cluster]
+                        export_stack.append([folder, cluster_number])
+
+
+                    if sign:
+                        file_details = dir.get_file_details(export_path[-1], export_stack[-1][1])
+                        if file_details is None:
+                            print('file not found')
+                        else:
+                            cluster_number = fat.FAT_List[folder_details.start_cluster]
+                            file_content = dir.read_file_content(cluster_number).strip('0').replace('*', '\n')
+                            new_file = open(command[2]+'\\'+command[3], 'w+')
+                            new_file.write(file_content)
+                            new_file.close()
+                else:
+                    if len(stack) == 0:
+                        file_details = dir.get_file_details(command[1])
+                    else:
+                        file_details = dir.get_file_details(command[1], stack[-1][1])
+
                     if file_details is None:
                         print('file not found')
                     else:
                         cluster_number = fat.FAT_List[file_details.start_cluster]
                         file_content = dir.read_file_content(cluster_number).strip('0').replace('*', '\n')
-                        new_file = open(command[2]+"\\"+command[3], 'w+')
-                        new_file.write(file_content)
-                else:
-                    file_details = dir.get_file_details(command[1])
-                    if file_details is None:
-                        print(' sorry file not found')
-                    else:
-                        cluster_number = fat.FAT_List[file_details.start_cluster]
-                        file_content = dir.read_file_content(cluster_number).strip('0').replace('*', '\n')
                         new_file = open(command[2] + '\\' + command[3], 'w+')
                         new_file.write(file_content)
+                        new_file.close()
 
 
             elif len(command) == 1:
-                print(' please enter the files name')
-            else:
-                print(' no no it is too many arguments')
+                print('enter the files name')
+            elif len(command) > 4:
+                print('too many arguments')
 
 
         elif command[0].lower() == 'rename':
@@ -1338,10 +1592,15 @@ while flag:
 
             elif len(command) == 3:
                 dir = Directory()
+                folder_details = Directory()
                 if command[1].find('.') == -1 and command[2].find('.') == -1:
-                    folder_details = dir.get_directory_details(command[1])
+                    if len(stack) == 0:
+                        file_details = dir.get_directory_details(command[1])
+                    else:
+                        file_details = dir.get_directory_details(command[1], stack[-1][1])
+
                     if folder_details is None:
-                        print(' ops folder not found !')
+                        print('folder not found')
                     else:
                         if len(stack) == 0:
                             folder_index = dir.search_for_a_folder(command[1])
@@ -1349,11 +1608,15 @@ while flag:
                         else:
                             folder_index = dir.search_for_a_folder(command[1], stack[len(stack) - 1][1])
                             Rename_Dir_Command(command[2], folder_index, stack[len(stack) - 1][1])
-                        print(' good job Changed Successfully')
+                        print('Changed Successfully')
                 else:
-                    file_details = dir.get_file_details(command[1])
+                    if len(stack) == 0:
+                        file_details = dir.get_file_details(command[1])
+                    else:
+                        file_details = dir.get_file_details(command[1], stack[-1][1])
+
                     if file_details is None:
-                        print(' sorry folder not found !!')
+                        print('file not found')
                     else:
                         file_name = command[1].split('.')
                         file_name = file_name[0] + file_name[1].upper()
@@ -1363,12 +1626,12 @@ while flag:
                         else:
                             file_index = dir.search_for_a_folder(file_name, stack[len(stack) - 1][1])
                             Rename_File_Command(command[2], file_index, stack[len(stack) - 1][1])
-                        print('* good job Changed Successfully *')
+                        print('Changed Successfully')
 
             elif len(command) == 2 and command[1] != '/?':
-                print('please enter the file name')
+                print('enter the file name')
             else:
-                print(' no no it is too many arguments')
+                print('too many arguments')
 
 
         elif command[0].lower() == 'type':
@@ -1377,17 +1640,22 @@ while flag:
 
             elif len(command) == 2 and command[1] != '/?':
                 dir = Directory()
-                file_details = dir.get_file_details(command[1])
+
+                if len(stack) == 0:
+                    file_details = dir.get_file_details(command[1])
+                else:
+                    file_details = dir.get_file_details(command[1], stack[-1][1])
+
                 if file_details is None:
-                    print(' sorry this file not found')
+                    print('file not found')
                 else:
                     if file_details.dir_attr == '1':
-                        print(' it is not a file')
+                        print('not a file')
                     elif file_details.dir_attr == '0':
                         cluster_number = fat.FAT_List[file_details.start_cluster]
 
                         if cluster_number == -1:
-                            print(' file is empty')
+                            print('file is empty')
                         else:
                             content = dir.read_file_content(cluster_number)
                             content = content.strip('0').split('*')
@@ -1396,13 +1664,16 @@ while flag:
                                 print(line)
 
             elif len(command) == 1:
-                print(' Please enter the file name')
+                print('enter the file name')
             else:
-                print(' No no it is too many arguments')
+                print('too many arguments')
 
         else:
             print(' Sorry this command  is not found, Please try again ')
+
+
     except FileNotFoundError:
         break
+
     except:
         pass
